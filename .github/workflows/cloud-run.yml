@@ -1,0 +1,52 @@
+name: "Deploy to Google Cloud Run"
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  PROJECT_ID: ${{ secrets.PROJECT_ID }}
+  SERVICE_NAME: deploy-nodejs-cloud-run
+  GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
+
+jobs:
+  deploy:
+    name: Deploy to Cloud Run
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      # Auth
+      - id: 'auth'
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
+
+      - name: Set up Google Cloud SKD
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Configure docker for GCP
+        run: gcloud auth configure-docker
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          tags: gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest
+          build-args: |
+            HTTP_PORT=8080
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v1
+        with:
+          image: gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest
+          service: ${{ env.SERVICE_NAME }}
+          region: us-central1
+          platform: managed
+          allow-unauthenticated: true
+          env_vars: |
+            FOO=bar
+            ZIP=zap
